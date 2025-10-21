@@ -1,0 +1,162 @@
+# ===============================
+# General .gitignore for ML / RL projects
+# ===============================
+
+# --- Python bytecode / cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+*.dll
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+*.env
+.env.*
+.envrc
+
+# --- Build / packaging artifacts ---
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Logs & temporary files ---
+*.log
+logs/
+*.out
+*.tmp
+tmp/
+temp/
+nohup.out
+
+# --- Experiment tracking / outputs ---
+wandb/
+mlruns/
+lightning_logs/
+tensorboard/
+tb_logs/
+results/
+outputs/
+checkpoints/
+runs/
+artifacts/
+*.ckpt
+*.tfevents.*
+
+# --- VS Code ---
+.vscode/
+*.code-workspace
+
+# --- JetBrains (PyCharm, IntelliJ, etc.) ---
+.idea/
+*.iml
+out/
+.idea_modules/
+
+# --- OS-specific junk ---
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Git / merge artifacts ---
+*.orig
+*.rej
+*.diff
+*.patch
+*.bak
+*.swp
+*.swo
+*.~lock.*
+*~
+
+# --- Data / cache / model files ---
+data/
+datasets/
+.cache/
+__data__/
+experiments/
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.pkl
+*.pt
+*.pth
+*.onnx
+*.sqlite
+*.prof
+*.profraw
+
+# --- Reports / LaTeX auxiliary ---
+*.aux
+*.bbl
+*.blg
+*.lof
+*.log
+*.lot
+*.toc
+*.out
+
+# --- Model artifacts ---
+checkpoints/
+models/
+weights/
+saved_models/
+export/
+output/
+
+# --- Configs / secrets ---
+config.yaml
+*.yml
+*.yaml
+*.json
+secrets.*
+.credentials/
+keys/
+api_keys/
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+coverage/
+.tox/
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+
+# --- Docker ---
+.docker/
+docker-compose.override.yml
+*.pid
+
+# --- Ignore editor backups ---
+*~
+*.bak
+*.tmp
+*.swp
+*.swo
+*.old
