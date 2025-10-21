@@ -11,13 +11,7 @@ __pycache__/
 *.so
 *.dll
 
-# --- Virtual environments ---
-.venv/
-venv/
-ENV/
-*.env
-.env.*
-.envrc
+
 
 # --- Build / packaging artifacts ---
 build/
