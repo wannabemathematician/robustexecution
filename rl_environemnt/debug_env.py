@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 from jax import lax
+import sys
 
 # 0: HOLD, 1: MKT, 2: LMT
 ACTION_HOLD = jnp.int32(0)
@@ -15,6 +16,7 @@ def quick_random_rollout(env, rng_key: jax.Array, num_steps: int = 16):
         jax.debug.print("[debug] Env is None — skipping rollout.")
         return None
 
+    # return 'something'
     obs, info = env.reset(seed=None, options=None)
     done0 = jnp.array(False)
     cum0 = jnp.array(0.0)
@@ -52,7 +54,15 @@ def quick_random_rollout(env, rng_key: jax.Array, num_steps: int = 16):
 
 
 def main():
+    
     rng = jax.random.PRNGKey(0)
-    env = None # PLACEHOLDER
 
-    quick_random_rollout(env=env, rng_key=rng)
+    env = 'None' #= initialize
+    jax.debug.print(f"Env: {env}")
+    
+
+    # result = quick_random_rollout(env=env, rng_key=rng)
+    # jax.debug.print(f"Result: {result}")
+
+if __name__ == "__main__":
+    main()
