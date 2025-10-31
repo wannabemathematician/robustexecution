@@ -71,10 +71,12 @@ RUN git config --global --add safe.directory /home/${MYUSER}
 #     git config --global user.name "reuben"
 
 
+
+
 # docker rmi robustexecution_docker
 # docker build -t robustexecution_docker .
 
-# docker run --rm --gpus "device=7" -v "$(pwd):/home/duser" -w /home/duser --name robustexecution_container robustexecution_docker python -u rl_environemnt/onlySteps_noRL_ready.py
+# docker run --rm --gpus '"device=0,1,2,3"' -v "$(pwd):/home/duser" -w /home/duser -e WANDB_API_KEY=... -e WANDB_PROJECT=AlphaTradeJAX_Train --name robustexecution_container robustexecution_docker python -u rl_environemnt/onlySteps_noRL_ready.py
 
-# docker run --rm --gpus "device=7" -v "$(pwd):/home/duser" -w /home/duser --name robustexecution_container robustexecution_docker python -u rl_environemnt/ppoRnnExecCont_ready.py
+# docker run --rm --gpus '"device=0,1,2,3"' -v "$(pwd):/home/duser" -w /home/duser -e WANDB_API_KEY=... -e WANDB_PROJECT=AlphaTradeJAX_Train --name robustexecution_container robustexecution_docker python -u rl_environemnt/ppoRnnExecCont_ready.py
 

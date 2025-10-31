@@ -34,6 +34,20 @@ from jax import config
 
 config.update("jax_check_tracer_leaks",False) #finds a whole assortment of leaks if true... bizarre.
 
+"""
+Optional Weights & Biases logging: if WANDB_API_KEY is provided in the
+environment, we will login and enable wandb logging in addition to console prints.
+"""
+_WANDB_KEY = os.environ.get("WANDB_API_KEY")
+wandb = None
+if _WANDB_KEY:
+    try:
+        import wandb as _wandb
+        _wandb.login(key=_WANDB_KEY)
+        wandb = _wandb
+    except Exception:
+        wandb = None
+
 #instead importing LogWrapper from purejaxrl, we define it here. purejaxrl is not installed in the environment.
 class LogWrapper:
     def __init__(self, env):
@@ -125,6 +139,14 @@ def make_train(config):
                         print(
                             f"global step={timesteps[t]}, episodic return={return_values[t]}"
                         )
+                        if wandb is not None:
+                            try:
+                                wandb.log({
+                                    "global_step": int(timesteps[t]),
+                                    "episodic_return": float(return_values[t]),
+                                })
+                            except Exception:
+                                pass
 
                 jax.debug.callback(callback, metric)
 
@@ -147,21 +169,64 @@ def make_train(config):
 
 
 if __name__ == "__main__":
+    import datetime
+    import json
+    
     try:
         ATFolder = sys.argv[1] 
     except:
         ATFolder = '/home/duser'
     print("AlphaTrade folder:",ATFolder)
 
+    # Setup experiment directory structure
+    experiments_dir = "/home/duser/experiments"
+    os.makedirs(experiments_dir, exist_ok=True)
+    
+    # Generate experiment name: exp_<number>_<timestamp>
+    existing_exps = [d for d in os.listdir(experiments_dir) if d.startswith("exp_") and os.path.isdir(os.path.join(experiments_dir, d))]
+    if existing_exps:
+        exp_nums = []
+        for exp in existing_exps:
+            try:
+                num = int(exp.split("_")[1])
+                exp_nums.append(num)
+            except (ValueError, IndexError):
+                pass
+        next_exp_num = max(exp_nums) + 1 if exp_nums else 1
+    else:
+        next_exp_num = 1
+    
+    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    exp_name = f"exp_{next_exp_num}_{timestamp_str}"
+    exp_dir = os.path.join(experiments_dir, exp_name)
+    os.makedirs(exp_dir, exist_ok=True)
+
     config = {
-        "NUM_ENVS": 1000,
+        "NUM_ENVS": 10,
         "NUM_STEPS": 10,
-        "TOTAL_TIMESTEPS": 5e5,
+        "TOTAL_TIMESTEPS": 1000,
         "DEBUG": True,
         "ATFOLDER": ATFolder,
         "TASKSIDE":'buy',
         "ACTION_TYPE":"pure"
     }
+
+    # Save config to experiment directory
+    config_save_path = os.path.join(exp_dir, "config.json")
+    with open(config_save_path, 'w') as f:
+        json.dump(config, f, indent=2, default=str)
+    
+    print(f"Experiment: {exp_name}")
+    print(f"Experiment directory: {exp_dir}")
+
+    # Initialize wandb run if available
+    if wandb is not None:
+        try:
+            run = wandb.init(project=os.environ.get("WANDB_PROJECT", "AlphaTradeJAX_Train"), config=config, save_code=False)
+        except Exception:
+            run = None
+    else:
+        run = None
 
     rng = jax.random.PRNGKey(30)
     # jax.debug.breakpoint()
@@ -177,4 +242,10 @@ if __name__ == "__main__":
     start=time.time()
     out = train_jit(rng)
     print("Time: ", time.time()-start)
+
+    if run is not None:
+        try:
+            run.finish()
+        except Exception:
+            pass
 

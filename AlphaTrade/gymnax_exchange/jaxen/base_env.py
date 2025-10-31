@@ -37,7 +37,7 @@ class EnvParams:
     episode_time: int =  60*30 #60seconds times 30 minutes = 1800seconds
     # max_steps_in_episode: int = 100
     time_per_step: int= 0##Going forward, assume that 0 implies not to use time step?
-    time_delay_obs_act: chex.Array = struct.field(default_factory=lambda: jnp.array([0, 0])) #0ns time delay.
+    time_delay_obs_act: tuple[int, int] = (0, 0) #0ns time delay.
     
 
 
@@ -465,7 +465,7 @@ class BaseLOBEnv(environment.Environment):
         quants=action["quantities"] #from action space
         trader_ids=jnp.ones((self.n_actions,),jnp.int32)*self.trader_unique_id #This agent will always have the same (unique) trader ID
         order_ids=jnp.ones((self.n_actions,),jnp.int32)*(self.trader_unique_id+state.customIDcounter)+jnp.arange(0,self.n_actions) #Each message has a unique ID
-        times=jnp.resize(state.time+params.time_delay_obs_act,(self.n_actions,2)) #time from last (data) message of prev. step + some delay
+        times=jnp.resize(state.time + jnp.asarray(params.time_delay_obs_act, dtype=jnp.int32),(self.n_actions,2)) #time from last (data) message of prev. step + some delay
         #Stack (Concatenate) the info into an array 
         action_msgs=jnp.stack([types,sides,quants,prices,trader_ids,order_ids],axis=1)
         action_msgs=jnp.concatenate([action_msgs,times],axis=1)

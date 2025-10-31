@@ -78,8 +78,8 @@ class EnvParams:
     # max_steps_in_episode: int = 100 # TODO should be a variable, decied by the data_window
     # messages_per_step: int=1 # TODO never used, should be removed?
     time_per_step: int= 0##Going forward, assume that 0 implies not to use time step?
-    time_delay_obs_act: chex.Array = struct.field(default_factory=lambda: jnp.array([0, 0])) #0ns time delay.
-    avg_twap_list: chex.Array = struct.field(default_factory=lambda: jnp.array([312747.47,
+    time_delay_obs_act: chex.Array = jnp.array([0, 0]) #0ns time delay.
+    avg_twap_list=jnp.array([312747.47,
                             312674.06,
                             313180.38,
                             312813.25,
@@ -91,7 +91,7 @@ class EnvParams:
                             313578.9,
                             314559.1,
                             315201.1,
-                            315190.2]))
+                            315190.2])
     
 
 

@@ -38,7 +38,11 @@ def add_order(orderside: chex.Array, msg: dict) -> chex.Array :
 
 @jax.jit
 def __removeZeroNegQuant(orderside):
-    return jnp.where((orderside[:,1]<=0).reshape((orderside.shape[0],1)), (jnp.ones(orderside.shape)*-1).astype(jnp.int32), orderside)
+    return jnp.where(
+        (orderside[:,1] <= 0).reshape((orderside.shape[0], 1)),
+        (jnp.ones(orderside.shape) * -1).astype(jnp.int32),
+        orderside,
+    )
 
 
 # @jax.jit

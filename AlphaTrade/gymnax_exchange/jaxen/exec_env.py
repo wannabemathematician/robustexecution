@@ -83,8 +83,9 @@ class EnvParams:
     # max_steps_in_episode: int = 100 # TODO should be a variable, decied by the data_window
     # messages_per_step: int=1 # TODO never used, should be removed?
     time_per_step: int= 0##Going forward, assume that 0 implies not to use time step?
-    time_delay_obs_act: chex.Array = struct.field(default_factory=lambda: jnp.array([0, 0])) #0ns time delay.
-    avg_twap_list: chex.Array = struct.field(default_factory=lambda: jnp.array([312747.47,
+    time_delay_obs_act: tuple[int, int] = (0, 0) #0ns time delay.
+    avg_twap_list: tuple[float, ...] = (
+                            312747.47,
                             312674.06,
                             313180.38,
                             312813.25,
@@ -96,7 +97,7 @@ class EnvParams:
                             313578.9,
                             314559.1,
                             315201.1,
-                            315190.2]))
+                            315190.2)
     
 
 
@@ -306,7 +307,8 @@ class ExecutionEnv(BaseLOBEnv):
         sides=-1*jnp.ones((self.n_actions,),jnp.int32) if self.task=='sell' else jnp.ones((self.n_actions),jnp.int32) #if self.task=='buy'
         trader_ids=jnp.ones((self.n_actions,),jnp.int32)*self.trader_unique_id #This agent will always have the same (unique) trader ID
         order_ids=jnp.ones((self.n_actions,),jnp.int32)*(self.trader_unique_id+state.customIDcounter)+jnp.arange(0,self.n_actions) #Each message has a unique ID
-        times=jnp.resize(state.time+params.time_delay_obs_act,(self.n_actions,2)) #time from last (data) message of prev. step + some delay
+        times=jnp.resize(state.time + jnp.asarray(params.time_delay_obs_act, dtype=jnp.int32),(self.n_actions,2)) #time from last (data) message of prev. step + some delay
+        times=jnp.resize(state.time + jnp.asarray(params.time_delay_obs_act, dtype=jnp.int32),(self.n_actions,2)) #time from last (data) message of prev. step + some delay
         #Stack (Concatenate) the info into an array 
         # --------------- 01 rest info for deciding action_msgs ---------------
         

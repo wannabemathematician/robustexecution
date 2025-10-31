@@ -2,7 +2,22 @@
 # config.update("jax_enable_x64",True)
 import os
 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"]="true"
+# Use caller-provided settings; default to safer GPU memory behavior for multi-GPU
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", "0.7")
+"""
+Optional Weights & Biases logging: if WANDB_API_KEY is provided in the
+environment, we will login and enable wandb logging in addition to console prints.
+"""
+_WANDB_KEY = os.environ.get("WANDB_API_KEY")
+wandb = None
+if _WANDB_KEY:
+    try:
+        import wandb as _wandb
+        _wandb.login(key=_WANDB_KEY)
+        wandb = _wandb
+    except Exception:
+        wandb = None
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
@@ -66,16 +81,12 @@ print(jax.devices()[0])
 from jax import config
 config.update("jax_disable_jit", False) 
 # config.update("jax_disable_jit", True)
-config.update("jax_check_tracer_leaks",True) #finds a whole assortment of leaks if true... bizarre.
+config.update("jax_check_tracer_leaks", False) # disable to avoid false-positive leaks under pmap during init
 import datetime
 
 
 
 
-wandbOn = False
-# wandbOn = False
-if wandbOn:
-    import wandb
 
 def save_checkpoint(params, filename):
     with open(filename, 'wb') as f:
@@ -420,9 +431,8 @@ def make_train(config):
             train_state = update_state[0]
             metric = (traj_batch.info,train_state.params)
             rng = update_state[-1]
-            if config.get("DEBUG"):
 
-                def callback(metric):
+            def callback(metric):
                     
                     info,trainstate_params=metric
                     
@@ -434,14 +444,17 @@ def make_train(config):
                     )
                     
                     def evaluation():
-                        if not os.path.exists(config['CHECKPOINT_DIR']): os.makedirs(config['CHECKPOINT_DIR'])
-                        # Inside your loop or function where you save the checkpoint
-                        if any(timesteps % int(1e3) == 0) and len(timesteps) > 0:  # +1 since global_step is 0-indexed
+                        os.makedirs(config['CHECKPOINT_DIR'], exist_ok=True)
+                        # Save only when the first timestep hits a 1k boundary to avoid multi-replica spam
+                        if len(timesteps) > 0 and int(timesteps[0]) % int(1e3) == 0:
                             start = time.time()
                             jax.debug.print(">>> checkpoint saving {}",timesteps[0]//1000*1000)
                             # Save the checkpoint to the specific directory
                             checkpoint_filename = os.path.join(config['CHECKPOINT_DIR'], f"checkpoint_{timesteps[0]//1000*1000}.ckpt")
-                            save_checkpoint(trainstate_params, checkpoint_filename)  # Assuming trainstate_params contains your model's state
+                            try:
+                                save_checkpoint(trainstate_params, checkpoint_filename)
+                            except FileExistsError:
+                                pass
                             jax.debug.print("+++ checkpoint saved  {}",timesteps[0]//1000*1000)
                             jax.debug.print("+++ time taken        {}",time.time()-start)        
                     evaluation()
@@ -470,27 +483,27 @@ def make_train(config):
                     '''
                     
                     # '''
-                    for t in range(len(timesteps)):  
-                        if wandbOn:
-                            wandb.log(
-                                {
-                                    "global_step": timesteps[t],
-                                    "episodic_return": return_values[t],
-                                    "episodic_revenue": revenues[t],
-                                    "quant_executed":quant_executed[t],
-                                    "average_price":average_price[t],
-                                    "slippage_rm":slippage_rm[t],
-                                    "price_adv_rm":price_adv_rm[t],
-                                    "price_drift_rm":price_drift_rm[t],
-                                    "vwap_rm":vwap_rm[t],
-                                    "current_step":current_step[t],
-                                    "advantage_reward":advantage_reward[t],
-                                }
-                            )        
-                        else:
-                            print(
-                                f"global step={timesteps[t]:<11} | episodic return={return_values[t]:<11} | episodic revenue={revenues[t]:<11} | average_price={average_price[t]:<11}"
-                            )     
+                    for t in range(len(timesteps)):
+                        print(
+                            f"global step={timesteps[t]:<11} | episodic return={return_values[t]:<11} | episodic revenue={revenues[t]:<11} | average_price={average_price[t]:<11}"
+                        )
+                        if wandb is not None:
+                            try:
+                                wandb.log({
+                                    "global_step": int(timesteps[t]),
+                                    "episodic_return": float(return_values[t]),
+                                    "episodic_revenue": float(revenues[t]),
+                                    "quant_executed": float(quant_executed[t]),
+                                    "average_price": float(average_price[t]),
+                                    "slippage_rm": float(slippage_rm[t]),
+                                    "price_adv_rm": float(price_adv_rm[t]),
+                                    "price_drift_rm": float(price_drift_rm[t]),
+                                    "vwap_rm": float(vwap_rm[t]),
+                                    "current_step": int(current_step[t]),
+                                    "advantage_reward": float(advantage_reward[t]),
+                                })
+                            except Exception:
+                                pass
                             # print("==="*20)      
                             # print(info["current_step"])  
                             # print(info["total_revenue"])  
@@ -500,7 +513,7 @@ def make_train(config):
                     # '''
 
 
-                jax.debug.callback(callback, metric)
+            jax.debug.callback(callback, metric)
 
             runner_state = (train_state, env_state, last_obs, last_done, hstate, rng)
             return runner_state, metric
@@ -522,6 +535,31 @@ def make_train(config):
     return train
 
 if __name__ == "__main__":
+    # Setup experiment directory structure
+    experiments_dir = "/home/duser/experiments"
+    os.makedirs(experiments_dir, exist_ok=True)
+    
+    # Generate experiment name: exp_<number>_<timestamp>
+    # Find next experiment number
+    existing_exps = [d for d in os.listdir(experiments_dir) if d.startswith("exp_") and os.path.isdir(os.path.join(experiments_dir, d))]
+    if existing_exps:
+        # Extract numbers and find max
+        exp_nums = []
+        for exp in existing_exps:
+            try:
+                num = int(exp.split("_")[1])
+                exp_nums.append(num)
+            except (ValueError, IndexError):
+                pass
+        next_exp_num = max(exp_nums) + 1 if exp_nums else 1
+    else:
+        next_exp_num = 1
+    
+    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    exp_name = f"exp_{next_exp_num}_{timestamp_str}"
+    exp_dir = os.path.join(experiments_dir, exp_name)
+    os.makedirs(exp_dir, exist_ok=True)
+    
     timestamp=datetime.datetime.now().strftime("%m-%d_%H-%M")
 
     ppo_config = {
@@ -563,44 +601,61 @@ if __name__ == "__main__":
         "ACTION_TYPE":"pure",
         # "ACTION_TYPE":"delta",
         "TASK_SIZE":500,
-        "RESULTS_FILE":"/home/duser/results_file_"+f"{timestamp}",
-        "CHECKPOINT_DIR":"/home/duser/checkpoints_"+f"{timestamp}",
+        "RESULTS_FILE":os.path.join(exp_dir, f"results_file_{timestamp}"),
+        "CHECKPOINT_DIR":os.path.join(exp_dir, "checkpoints"),
     }
 
-    if wandbOn:
-        run = wandb.init(
-            project="AlphaTradeJAX_Train",
-            config=ppo_config,
-            # sync_tensorboard=True,  # auto-upload  tensorboard metrics
-            save_code=True,  # optional
-        )
-        import datetime;params_file_name = f'params_file_{wandb.run.name}_{timestamp}'
-        print(f"Results would be saved to {params_file_name}")
+    # for debugging
+    ppo_config.update({
+    "NUM_ENVS": 2,
+    "NUM_STEPS": 2,
+    "TOTAL_TIMESTEPS": 1000,
+    "NUM_MINIBATCHES": 1,
+    "UPDATE_EPOCHS": 1,
+    "DEBUG": True,
+    "WINDOW_INDEX": 0,
+    "TASK_SIZE": 1,})
+
+    # Initialize wandb run if available
+    if wandb is not None:
+        try:
+            run = wandb.init(project=os.environ.get("WANDB_PROJECT", "AlphaTradeJAX_Train"), config=ppo_config, save_code=False)
+        except Exception:
+            run = None
     else:
-        import datetime;params_file_name = f'params_file_{timestamp}'
-        print(f"Results would be saved to {params_file_name}")
-        
-        
+        run = None
 
+    params_file_name = os.path.join(exp_dir, f'params_file_{timestamp}.ckpt')
     
+    # Save config to experiment directory
+    import json
+    config_save_path = os.path.join(exp_dir, "config.json")
+    with open(config_save_path, 'w') as f:
+        json.dump(ppo_config, f, indent=2, default=str)
+    
+    print(f"Experiment: {exp_name}")
+    print(f"Experiment directory: {exp_dir}")
+    print(f"Results would be saved to {params_file_name}")
+        
+        
     # +++++ Single GPU +++++
-    rng = jax.random.PRNGKey(0)
-    # rng = jax.random.PRNGKey(30)
-    train_jit = jax.jit(make_train(ppo_config))
-    start=time.time()
-    out = train_jit(rng)
-    print("Time: ", time.time()-start)
+    # rng = jax.random.PRNGKey(0)
+    # # rng = jax.random.PRNGKey(30)
+    # train_jit = jax.jit(make_train(ppo_config))
+    # start=time.time()
+    # out = train_jit(rng)
+    # print("Time: ", time.time()-start)
     # +++++ Single GPU +++++
 
     # # +++++ Multiple GPUs +++++
-    # num_devices = 4
-    # rng = jax.random.PRNGKey(30)
-    # rngs = jax.random.split(rng, num_devices)
-    # train_fn = lambda rng: make_train(ppo_config)(rng)
-    # start=time.time()
-    # out = jax.pmap(train_fn)(rngs)
-    # print("Time: ", time.time()-start)
-    # # +++++ Multiple GPUs +++++
+    num_devices = 4
+    rng = jax.random.PRNGKey(30)
+    rngs = jax.random.split(rng, num_devices)
+    train_fn = lambda rng: make_train(ppo_config)(rng)
+    start=time.time()
+    out = jax.pmap(train_fn)(rngs)
+    print("Time: ", time.time()-start)
+    # +++++ Multiple GPUs +++++
     
     
 
@@ -611,10 +666,6 @@ if __name__ == "__main__":
     train_state = out['runner_state'][0] # runner_state.train_state
     params = train_state.params
     
-
-
-    import datetime;params_file_name = f'params_file_{wandb.run.name}_{datetime.datetime.now().strftime("%m-%d_%H-%M")}'
-
     # Save the params to a file using flax.serialization.to_bytes
     with open(params_file_name, 'wb') as f:
         f.write(flax.serialization.to_bytes(params))
@@ -629,7 +680,8 @@ if __name__ == "__main__":
     # assert jax.tree_util.tree_all(jax.tree_map(lambda x, y: (x == y).all(), params, restored_params))
     # print(">>>")
     # '''
-
-    if wandbOn:
-        run.finish()
-
+    if run is not None:
+        try:
+            run.finish()
+        except Exception:
+            pass

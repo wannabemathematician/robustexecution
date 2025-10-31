@@ -74,7 +74,7 @@ class NEnvParams:
     max_steps_in_episode: int = 100
     messages_per_step: int=1
     time_per_step: int= 0##Going forward, assume that 0 implies not to use time step?
-    time_delay_obs_act: chex.Array = struct.field(default_factory=lambda: jnp.array([0, 0])) #0ns time delay.
+    time_delay_obs_act: chex.Array = jnp.array([0, 0]) #0ns time delay.
     
 
 
